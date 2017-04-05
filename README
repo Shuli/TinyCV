@@ -1,0 +1,4 @@
+1. Compile
+	./Make.sh
+2. Execute
+	./Dehaze.sh

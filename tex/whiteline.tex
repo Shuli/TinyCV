@@ -1,0 +1,385 @@
+\documentclass{jsarticle}
+\usepackage{multicol}
+\usepackage{amsmath}
+
+\title{並列演算素子をもちいた動画像からの高速な白線検知（案）}
+\author{錠 尚史}
+\date{2017/01/27}
+
+\begin{document}
+\maketitle
+
+%\begin{multicols*}{2}
+
+\part{はじめに}
+\label{はじめに}
+
+近年，自動車の自動運転の実用化に向けて動画像処理の重要性は増している．特に高速で移動する自動車は数ミリ秒以下での判断が求められるため，高速で動画像を処理できることが望ましい．本件ではIMP-X5並列演算素子を用いて，動画像処理の1つの手法である白線検知ならびに追跡を高速化し，その性能の程度を報告する．
+
+\section{並列演算素子}
+\label{並列演算素子}
+
+本件ではIMP-X5の性能を示すために，特に高速に並列処理される１）特徴点検出演算，２）行列・ベクトル演算，３）畳込・濾過演算らをもちいた白線検知を行う．これらの利用は必須の条件となる．
+
+\section{前提条件}
+\label{前提条件}
+
+自動車は必ず接地し，撮影機の高さは一定かつ平行である前提をおく．すなわち画像はエピポーラ面と無限遠点（消失点）$vp$をもつ．また，色相は画素ごとの三原色に基づくRGB色相とし，規格はRGB888を前提とする．（また，撮影機の解像度は$C_x$，$C_y$(ppi)，画像のピクセル寸法は$I_x$，$I_y$(pixel)を前提する．）
+
+\part{IMP-X5による高速な白線検知}
+\label{IMP-X5による高速な白線検知}
+
+\section{領域特定演算（ｐ１，ｐ２）}
+\label{領域特定演算（ｐ１，ｐ２）}
+
+\subsection{複眼視動画像}
+\label{複眼視動画像}
+
+R-CAR H3は複数の撮影機器をもち，複眼視が可能である．そのために複眼視を前提とする．なお，複眼視は以下のI/Fより可能である．また，R-CAR H3の仕様より視差などの値は以下の通り．
+\begin{center}
+\fbox{StereoMatching, p538}
+\end{center}
+
+\subsection{無限遠点}
+\label{無限遠点}
+
+無限遠点$vp$と視心と撮影機の高さは等しいために，撮影機の解像度$C_x$，$C_y$(ppi)とピクセル寸法$I_x$，$I_y$（pixel）とアイレベル$E$（cm）より無限遠点$vp$の高さ(pixel)が定まる．この無限遠点$vp$の高さより高い領域には白線は存在しないため，演算対象から除外して演算時間の短縮を図る．
+\[
+vp=\frac{2.54 C_y}{L_y}E
+\]
+
+\subsection{エピポーラ空間}
+\label{エピポーラ空間}
+
+複眼視によりエピポーラ面が求められるために，複眼視で得られたそれぞれの画像$IL$，$IR$の無限遠点$vp_{l}$，$vp_{r}$が定まる．さらにそれぞれの画像の無限遠点$vp_{l}$，$vp_{r}$からエピポーラ線$E_{l}$，$E_{r}$が求まるため，自動車の横の勾配$hs$が求まる．奥行きの勾配$ds$は\ref{無限遠点条件}で補正して得る．なお，縦の勾配$vs$は横滑りとして考慮しない．またFは\ref{前提条件}より固定であるために，行列演算のみを行い処理時間を短縮する．
+\[
+vp_l^T F vp_r = 0
+\]
+\[
+vp_l = \begin{bmatrix} IL_x \\ IL_y \\ IL_z \end{bmatrix},
+vp_r = \begin{bmatrix} IR_x \\ IR_y \\ IR_z \end{bmatrix}
+\]
+\[
+\begin{bmatrix} IR_x^i & IR_y^i & IR_z^i \end{bmatrix}
+\begin{bmatrix} F_{11} & F_{12} & F_{13} \\ F_{21} & F_{22} & F_{23} \\ F_{31} & F_{32} & F_{33} \end{bmatrix}
+\begin{bmatrix} IL_x^i \\ IL_y^i \\ IL_z^i \end{bmatrix}
+=0
+\]
+\[
+\begin{bmatrix}
+IR_x^1 IL_x^1 & IR_x^1 IL_y^1 & IR_x^1 IL_z^1 & \cdots & IR_z^1 IL_z^1 \\
+IR_x^2 IL_x^2 & IR_x^2 IL_y^2 & IR_x^2 IL_z^2  & \cdots & IR_z^2 IL_z^2 \\
+\vdots & \vdots & \vdots & \ddots & \vdots \\
+IR_x^n IL_x^n & IR_x^n IL_y^n & IR_x^n IL_z^n  & \cdots & IR_z^n IL_z^n
+\end{bmatrix}
+\begin{bmatrix}
+F_{11} \\ F_{12} \\ F_{13} \\ \vdots \\ F_{33}
+\end{bmatrix}
+=AF=0
+\]
+\[
+E_{l} = F^T vp_{r}, E_{r} = F^T vp_{l}
+\]
+\[
+hs = tan^{-1} \frac{\max_{y} E_l - \min_{y} E_l}{\max_{x} E_l - \min_{x} E_l}
+\]
+\begin{center}
+\fbox{Matrix Operation, p525}
+\end{center}
+
+\section{単色化演算（ｐ１）}
+\label{単色化演算（ｐ１）}
+
+%\subsection{環境光依存}
+%\label{環境光依存}
+
+%画像の画素は時間に伴う日照，天候に伴う日照により大きく変化する．以下の時間と天候について補正する濾過演算より単色化の頑強性を確保する．また，時間と天候は別途与えられる前提をおく．なお，本節以降，複眼視の左画像を対象とする．
+
+\subsection{色成分合成}
+\label{色成分合成}
+
+道路の白線の色には白以外に黄が存在する．RGB色相の前提より，以下のRGとRGBの畳み込み（AND演算子）により得られる画素を白線の候補$C$とする．
+\[
+CL = (IL_r \otimes IL_g) \otimes (IL_r \otimes IL_g \otimes IL_b)
+\]
+\[
+CR = (IR_r \otimes IR_g) \otimes (IR_r \otimes IR_g \otimes IR_b)
+\]
+\begin{center}
+\fbox{Inter-Image Logic Operation, p182}
+\end{center}
+
+\subsection{単色頑強性}
+\label{単色頑強性}
+
+路傍と道路で輝度の分布に局地的な偏りが見られ，望む二値化が行えない際があり得る．この際，画素をグラフのノードと捉えたSpectral Clusteringによる二値化が代替として考えられる．これは参考として付録Aに添付する．
+
+\section{特徴量演算（ｐ１）}
+\label{特徴量演算（ｐ１）}
+
+\subsection{フーリエ級数}
+\label{フーリエ級数}
+
+白線の特徴量は，隣接する画素の輝度の微分に基づいたフーリエ級数で得られる周波数成分とする．ここで，フーリエ級数の次元・分解能相当は$p$次元とする．なお，フーリエ級数の演算は以下のI/Fより可能である．
+\[
+f(t) = \frac{\alpha_0}{2} + \sum_{n=1}^p \{ \alpha_n \cos(n \omega_0 t) + b_n \sin(n \omega_0 t)\}
+\]
+\begin{center}
+\fbox{Fourier Transform, p510}
+\end{center}
+
+\subsection{特徴量窓範囲}
+\label{特徴量窓範囲}
+
+白線の特徴量は，画像全体内の$x+\bigtriangleup x$, $y+\bigtriangleup y$の局所的な窓範囲とする．その理由は画像全体の輝度分布の影響を軽減するためとする．なお，領域を定めたフーリエ級数の演算は以下のI/Fより可能である．
+\[
+f(IL_{t \in x+\bigtriangleup x,y+\bigtriangleup y}) = \frac{\alpha_0}{2} + \sum_{n=1}^p \{ \alpha_n \cos(n \omega_0 t) + b_n \sin(n \omega_0 t)\}
+\]
+\begin{center}
+\fbox{Fourier Transform, p510}
+\end{center}
+
+\subsection{輝度分布特徴量}
+\label{輝度分布特徴量}
+
+白線が存在する領域の特徴量は，白線と地面の対比を前提として尖度が高い分布を想定する．この際，分布が双峰であればより尖度が高い値を利用する．そのために輝度分布特徴量を尖度$k$のみとする．なお，フーリエ級数の演算は以下のI/Fより可能であり，得られる周波数成分を$x$，個数を$n$とする．
+\[
+k=\frac{n(n+1)}{(n-1)(n-2)(n-3)} \sum_{i=1}^n (\frac{x_i - \hat{x}}{S}) - \frac{3(n-1)^2}{(n-2)(n-3)}, S=\sqrt{\frac{1}{n-1} \sum_{i=1}^n (x_i-\hat{x})^2}
+\]
+\begin{center}
+\fbox{Fourier Transform, p510}
+\end{center}
+
+\section{白線判別演算（ｐ１）}
+\label{白線判別演算（ｐ１）}
+
+\subsection{直線・破線（停車線）}
+\label{直線・破線（停車線）}
+
+白線には直線以外に破線が存在する．そのためにハフ変換を利用して直線の獲得ならびに破線の補間を行う．ハフ変換の分解能は$hr$とする．なお，ハフ変換の演算は以下のI/Fより可能である．
+\[
+\rho=IL_x \cos \theta + IL_y \sin \theta
+\]
+\[
+IL_y = -(\frac{\cos \theta}{\sin \theta}) x + \frac{\rho}{\sin \theta},
+IL_x = -(\frac{\sin \theta}{\cos \theta})y + \frac{\rho}{\cos \theta}
+\]
+\begin{center}
+\fbox{Hough Transform, p499}
+\end{center}
+
+\subsection{無限遠点条件}
+\label{無限遠点条件}
+
+白線は無限遠点$vp$からの直線となる．そのためにそれを満たさない直線は白線としない．複数の白線が検出された際は，\ref{白線領域}で統合する．白線が検出されない際は，無限遠点$vp$が奥行きの勾配により変動しているため，回転行列を利用して奥行きの動径を$db$から$do$まで変動させて白線を得る．ここで奥行きの動径は$x$軸の回転とし，以下の回転行列を利用する．また，回転の演算は以下のI/Fより可能である．この際，2次元の回転に限定されるために，$x$軸と$z$軸を用いて回転させる．
+\[
+\begin{bmatrix} IL_x' \\ IL_y' \\ IL_z' \\ 1 \end{bmatrix} =
+\begin{bmatrix}
+1 & 0 & 0 & 0 \\
+0 & \cos \alpha & -\sin \alpha & 0 \\
+0 & \sin \alpha & \cos \alpha & 0 \\
+0 & 0 & 0 & 1
+\end{bmatrix}
+\begin{bmatrix}
+IL_x \\ IL_y \\ IL_z \\ 1
+\end{bmatrix},
+db \leq \alpha \leq do
+\]
+\begin{center}
+\fbox{Rotation, p98}
+\end{center}
+
+\subsection{白線領域}
+\label{白線領域}
+
+得られた白線をラベリングにより白線領域とする．なお，ラベリングの演算は以下のI/Fより可能である．
+\begin{center}
+\fbox{Labeling, p292}
+\end{center}
+
+\subsection{曲線・カーブ}
+\label{曲線・カーブ}
+
+白線には直線以外に道路により曲線となる．この曲線は\ref{白線領域}で得られた直線を含む白線領域で得る．
+\begin{center}
+\fbox{Labeling, p292}
+\end{center}
+
+\section{白線判別演算（ｐ２）}
+\label{白線判別演算（ｐ２）}
+
+\subsection{直接白線濾過}
+\label{直接白線濾過}
+
+上記の演算で性能が得られない際は，以下の白線検出のためのフィルタを動画像に適応する．ここでフィルタは7x7のカーネル関数とする．
+
+\[
+\begin{split}
+G
+=\frac{(p_{19}-p_{31})}{\sqrt{2}} \cdot \frac{[1,1]}{\sqrt{2}}
++\frac{(p_{17}-p_{33})}{\sqrt{2}} \cdot \frac{[-1,1]}{\sqrt{2}}
++\frac{(p_{13}-p_{37})}{\sqrt{8}} \cdot \frac{[2,2]}{\sqrt{8}}
++\frac{(p_{9}-p_{41})}{\sqrt{8}} \cdot \frac{[-2,2]}{\sqrt{8}} \\
++\frac{(p_{21}-p_{29})}{\sqrt{8}} \cdot \frac{[3,1]}{\sqrt{8}}
++\frac{(p_{15}-p_{35})}{\sqrt{8}} \cdot \frac{[-3,1]}{\sqrt{8}}
++\frac{(p_{6}-p_{44})}{\sqrt{10}} \cdot \frac{[2,3]}{\sqrt{10}}
++\frac{(p_{2}-p_{48})}{\sqrt{10}} \cdot \frac{[-2,3]}{\sqrt{10}}  \\
++\frac{(p_{14}-p_{36})}{\sqrt{10}} \cdot \frac{[3,2]}{\sqrt{10}}
++\frac{(p_{8}-p_{42})}{\sqrt{10}} \cdot \frac{[-3,2]}{\sqrt{10}}
++\frac{(p_{7}-p_{43})}{\sqrt{12}} \cdot \frac{[3,3]}{\sqrt{12}}
++\frac{(p_{1}-p_{49})}{\sqrt{12}} \cdot \frac{[-3,3]}{\sqrt{12}} 
+\end{split}
+\]
+
+\[
+\begin{split}
+G
+=[\frac{(p_{19} - p_{31} - p_{17} + p_{33})}{2}
++\frac{2(p_{13} - p_{37} - p_{9} + p_{41})}{8}
++\frac{3(p_{21} - p_{29} - p_{15} + p_{35})}{8} \\
++\frac{2(p_{6} - p_{44} - p_{2} + p_{48})}{10}
++\frac{3(p_{14} - p_{36} - p_{8} + p_{42})}{10}
++\frac{3(p_{7} - p_{43} - p_{1} + p_{49})}{12}, \\
+\frac{(p_{19} - p_{31} + p_{17} - p_{33})}{2} 
++\frac{2(p_{13} - p_{37} + p_{9} - p_{41})}{8}
++\frac{(p_{21} - p_{29} + p_{15} - p_{35})}{8} \\
++\frac{3(p_{6} - p_{44} + p_{2} - p_{48})}{10}
++\frac{2(p_{14} - p_{36} + p_{8} - p_{42})}{10}
++\frac{3(p_{7} - p_{43} + p_{1} - p_{49})}{12}
+]
+\end{split}
+\]
+
+\[
+\begin{split}
+G=G \cdot 120
+=[60(p_{19} - p_{31} - p_{17} + p_{33})
++30(p_{13} - p_{37} - p_{9} + p_{41})
++45(p_{21} - p_{29} - p_{15} + p_{35}) \\
++24(p_{6} - p_{44} - p_{2} + p_{48})
++36(p_{14} - p_{36} - p_{8} + p_{42})
++30(p_{7} - p_{43} - p_{1} + p_{49}), \\
+60(p_{19} - p_{31} + p_{17} - p_{33}) 
++30(p_{13} - p_{37} + p_{9} - p_{41})
++15(p_{21} - p_{29} + p_{15} - p_{35}) \\
++36(p_{6} - p_{44} + p_{2} - p_{48})
++24(p_{14} - p_{36} + p_{8} - p_{42})
++30(p_{7} - p_{43} + p_{1} - p_{49})
+]
+\end{split}
+\]
+
+\[
+G_x=
+\begin{bmatrix}
+-30 & -24 & 0 & 0 & 0 & 24 & 30 \\
+-36 & -30 & 0 & 0 & 0 & 30 & 36 \\
+-45 & 0 & -60 & 0 & 60 & 0 & 45 \\
+0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+-45 & 0 & -60 & 0 & 60 & 0 & 45 \\
+-36 & -30 & 0 & 0 & 0 & 30 & 36 \\
+-30 & -24 & 0 & 0 & 0 & 24 & 30
+\end{bmatrix},
+G_y=
+\begin{bmatrix}
+30 & 36 & 0 & 0 & 0 & 36 & 30 \\
+24 & 30 & 0 & 0 & 0 & 30 & 24 \\
+15 & 0 & 60 & 0 & 60 & 0 & 15 \\
+0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+-15 & 0 & -60 & 0 & -60 & 0 & -15 \\
+-24 & -30 & 0 & 0 & 0 & -30 & -24 \\
+-30 & -36 & 0 & 0 & 0 & -36 & -30
+\end{bmatrix}
+\]
+
+\section{白線追跡演算（ｐ１，ｐ２）}
+\label{白線追跡演算（ｐ１，ｐ２）}
+
+\subsection{白線未検出}
+\label{白線未検出}
+
+白線が検出されていない際は，白線の追跡は行わない．上記までの\ref{IMP-X5による高速な白線検知}により白線が得られるまで\ref{白線既検出}は行わない．
+
+\subsection{白線既検出}
+\label{白線既検出}
+
+白線が検出されている際は，白線領域の時間差分より移動ベクトルを取得する．この際，一つの参考としてのLucas Kanade法を以下に記す．この移動ベクトルより得られる画素をハフ変換し，白線を追跡する．また，白線の交点が無限遠点と異なる際は，無限遠点$vp$を得られた白線の交点に更新する．なお，移動ベクトル（オプティカルフロー）の演算は以下のI/Fより可能である．
+\[
+I(x,y,t)=I(x+\bigtriangleup x, y+ \bigtriangleup y, t+\bigtriangleup t)
+\]
+\[
+=I(x,y,t) + \frac{\partial I}{\partial x} \bigtriangleup x + \frac{\partial I}{\partial y} \bigtriangleup y + \frac{\partial I}{\partial t} \bigtriangleup t = 0
+\]
+\[
+=\frac{\partial I}{\partial x} \frac{\bigtriangleup x}{\bigtriangleup t} + 
+\frac{\partial I}{\partial y} \frac{\bigtriangleup y}{\bigtriangleup t} +
+\frac{\partial I}{\partial t} = 0
+\]
+\[
+=I_x \frac{\partial x}{\partial t} + I_y \frac{\partial y}{\partial t} + I_t  = 0
+\]
+\[
+I_x V_x + I_y V_y + I_t = 0, \nabla I^T v = -It
+\]
+\[
+A=\begin{bmatrix} I_x(q_1) V_x + I_y(q_1) V_y \\ \vdots \\ I_x(q_n) V_x + I_y(q_n) V_y \end{bmatrix},
+b=\begin{bmatrix} -I_t(q1) \\ \vdots \\ -I_t(q_n) \end{bmatrix}
+AV=b
+\]
+\[
+V=(A^T A)^{-1} A^T b
+\]
+\begin{center}
+\fbox{Optical Flow Settings, p436}
+\end{center}
+
+\part{付録A}
+\label{付録A}
+
+\section{Spectral Clusteringによる輝度の局所的な偏りに頑強な二値化}
+\label{Spectral Clusteringによる輝度の局所的な偏りに頑強な二値化}
+
+\subsection{はじめに}
+\label{はじめに２}
+
+大津の方法に代表される一般的な二値化は，２クラス分類を前提とし，輝度のクラス内分散の最大化，クラス間分散の最小化
+に基づいた二値化を行う．すなわち画像全体の背景と前景の輝度の互いの重心に基づいて二値化を実施しており，画像内の局所的な輝度の変化は平坦化される傾向にある．本件ではこの二値化の局所的な平坦化の問題について，ラプラス固有写像空間の特性を利用した一般化固有値問題の解法を用い，局所性保存射影を確保して問題の解決を図る．
+
+\subsection{画素の輝度の類似度}
+\label{画素の輝度の類似度}
+
+ここで画素の輝度の類似度を$W_{i,j}$と定義する．この類似度は，近傍数$k$を要素とした際の密度分布の差を表す．ここでこの画素の輝度の類似度よりキルヒホフ行列（グラフラプラシアン行列）$L$と次数行列$D$を求め，画像をグラフとして表す．この$L$について次数$A$をとる一般化固有値問題として解を求めれば，局所性保存写像$U$が求められる．ここで得られた$A$より，局所的な二値化分類は平坦化を伴わずに行われる．なお，さらにラプラシアンカーネル写像を用いた際にも，局所性保存写像$U$はラプラス固有写像に等しく，局所的な二値化分類を平坦化せずに行える．
+
+\newcommand{\argmin}{\mathop{\rm arg~min}\limits}
+
+\[
+W_{i,j} = exp(\frac{-\|x_i - x_j\|^2}{\gamma_i \gamma_j}),
+\gamma_i = \|x_i-x_i^{(k)}\|,
+\gamma_j = \|x_j-x_j^{(k)}\|
+\]
+\[
+D = diag(\sum_{j=1}^n W_{1j}, ... , \sum_{j=1}^n W_{nj}),
+L = D - W
+\]
+\[
+\argmin_{A \in \mathcal{R}} [tr(ALA^T)] (subject: ADA^T=I)
+\]
+\[
+ALA^Tv = \lambda ADA^Tv
+\]
+\[
+\Phi L \Phi^T v = \lambda \Phi D \Phi^T v (\Phi = [\phi(A_1)|...|\phi(A_n)])
+\]
+\[
+KLK\alpha = \lambda KDK \alpha (v=\Phi \alpha)
+\]
+\[
+L \beta = \lambda D \beta (\beta=K \alpha)
+\]
+
+%\end{multicols*}
+
+\end{document}
+
+
+￥

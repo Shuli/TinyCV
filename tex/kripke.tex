@@ -1,0 +1,175 @@
+<<<<<<< HEAD
+\documentclass{jsarticle}
+\usepackage{multicol}
+\usepackage{amsmath}
+\usepackage{ascmac}
+
+\title{Proof of logical consistency of fog removal by temporal logic}
+\author{Hisashi IKARI}
+\date{2017/03/06}
+
+\begin{document}
+
+\part{Proof of logical consistency of fog removal by temporal logic}
+\label{Proof of logical consistency of fog removal by temporal logic}
+
+The state transition of the calculation process of fog removal based on the Kripke model is as follows[1-4].
+The proposition determined based on the Kripke model is satisfied as follows[5-6]. Based on this model, it prevents the use of excessive resources and guarantees parallelism.
+
+
+\begin{equation}
+\begin{split}
+M_{mutex}=<S_{mutex}, R_{mutex}, L_{mutex}>
+\end{split}
+\end{equation}
+
+\begin{equation}
+\begin{split}
+\begin{gathered}
+S_{mutex}=\bigl\{(darkchannel, atmosphere, transmission, guidedfilter,sumfilter,radiance, \\
+grayscale, matrix, resource) | darkchannel \in \bigl\{1,...,9\bigr\}, atmosphere \in \bigl\{1,...,13\bigr\}, \\
+transmission \in \bigl\{1,...,11\bigr\},guidedfilter \in \bigl\{1,...,45\bigr\}, \\
+sumfilter \in \bigl\{1,...,19\bigr\}, radiance \in \bigl\{1,...,12\bigr\}, grayscale \in \bigl\{1\bigr\}, \\
+matrix \in \bigl\{1,...,21\bigr\}, resource  \in \bigl\{0, 1\bigr\}\bigr\}
+\end{gathered}
+\end{split}
+\end{equation}
+
+\begin{equation}
+\begin{split}
+\begin{gathered}
+R_{mutex}=\bigl\{(darkchannel, atmosphere, transmission, guidedfilter, sumfilter, radiance, \\
+grayscale, matrix, resource), (darkchannel', atmosphere', transmission', \\
+guidedfilter',sumfilter', radiance', grayscale', matrix', resource') | \\
+(darkchannel, atmosphere, transmission, guidedfilter, sumfilter, \\
+radiance, grayscale, matrix, resource) \rightarrow (darkchannel', atmosphere', \\
+transmission', guidedfilter', sumfilter', radiance', grayscale', \\
+matrix', resource') \in \Sigma \bigr\}
+\end{gathered}
+\end{split}
+\end{equation}
+
+\begin{equation}
+\begin{split}
+\begin{gathered}
+L_{mutex}(darkchannel, atmosphere, transmission, guidedfilter, sumfilter, \\
+radiance, grayscale,matrix, resource)=\bigl\{(pc_0=darkchannel), \\
+(pc_1=atmosphere),(pc_2=transmission),(pc_3=guidedfilter), \\
+(pc_4=sumfilter),(pc_5=radiance),(pc_6=grayscale),(gpu=matrix), (n=resource)\bigr\}
+\end{gathered}
+\end{split}
+\end{equation}
+
+\begin{equation}
+\begin{split}
+\begin{gathered}
+(pc_i=darkchannel) \in L_{mutex}(darkchannel, atmosphere, transmission, \\
+guidedfilter, sumfilter,radiance, grayscale, matrix, resource)= \\ 
+\bigl\{(pc_0=darkchannel),(pc_1=atmosphere),(pc_2=transmission), \\
+(pc_3=guidedfilter),(pc_4=sumfilter),(pc_5=radiance),(pc_6=grayscale),\\
+(gpu=matrix), (n=resource)\bigr\} (pc_2=darkchannel) \in L_{mutex}(2, 2, 1)
+\end{gathered}
+\end{split}
+\end{equation}
+
+\begin{equation}
+\begin{split}
+\begin{gathered}
+PA_{mutex}=\bigl\{(pc_i=darkchannel) | i \in\bigl\{0, 1\bigr\}, darkchannel \in \bigl\{1,...,9\bigr\}\bigr\} \\
+\cup \bigl\{(gpu=matrix) | resource \in \bigl\{1,...,21\bigr\}\bigr\} \\
+\cup \bigl\{(n=resource) | resource \in \bigl\{0, 1\bigr\} \bigr\} \cup \bigl\{false\bigr\}
+\end{gathered}
+\end{split}
+\end{equation}
+
+\end{document}
+
+
+=======
+\documentclass{jsarticle}
+\usepackage{multicol}
+\usepackage{amsmath}
+\usepackage{ascmac}
+
+\title{Proof of logical consistency of fog removal by temporal logic}
+\author{Hisashi IKARI}
+\date{2017/03/06}
+
+\begin{document}
+
+\part{Proof of logical consistency of fog removal by temporal logic}
+\label{Proof of logical consistency of fog removal by temporal logic}
+
+The state transition of the calculation process of fog removal based on the Kripke model is as follows[1-4].
+The proposition determined based on the Kripke model is satisfied as follows[5-6]. Based on this model, it prevents the use of excessive resources and guarantees parallelism.
+
+
+\begin{equation}
+\begin{split}
+M_{mutex}=<S_{mutex}, R_{mutex}, L_{mutex}>
+\end{split}
+\end{equation}
+
+\begin{equation}
+\begin{split}
+\begin{gathered}
+S_{mutex}=\bigl\{(darkchannel, atmosphere, transmission, guidedfilter,sumfilter,radiance, \\
+grayscale, matrix, resource) | darkchannel \in \bigl\{1,...,9\bigr\}, atmosphere \in \bigl\{1,...,13\bigr\}, \\
+transmission \in \bigl\{1,...,11\bigr\},guidedfilter \in \bigl\{1,...,45\bigr\}, \\
+sumfilter \in \bigl\{1,...,19\bigr\}, radiance \in \bigl\{1,...,12\bigr\}, grayscale \in \bigl\{1\bigr\}, \\
+matrix \in \bigl\{1,...,21\bigr\}, resource  \in \bigl\{0, 1\bigr\}\bigr\}
+\end{gathered}
+\end{split}
+\end{equation}
+
+\begin{equation}
+\begin{split}
+\begin{gathered}
+R_{mutex}=\bigl\{(darkchannel, atmosphere, transmission, guidedfilter, sumfilter, radiance, \\
+grayscale, matrix, resource), (darkchannel', atmosphere', transmission', \\
+guidedfilter',sumfilter', radiance', grayscale', matrix', resource') | \\
+(darkchannel, atmosphere, transmission, guidedfilter, sumfilter, \\
+radiance, grayscale, matrix, resource) \rightarrow (darkchannel', atmosphere', \\
+transmission', guidedfilter', sumfilter', radiance', grayscale', \\
+matrix', resource') \in \Sigma \bigr\}
+\end{gathered}
+\end{split}
+\end{equation}
+
+\begin{equation}
+\begin{split}
+\begin{gathered}
+L_{mutex}(darkchannel, atmosphere, transmission, guidedfilter, sumfilter, \\
+radiance, grayscale,matrix, resource)=\bigl\{(pc_0=darkchannel), \\
+(pc_1=atmosphere),(pc_2=transmission),(pc_3=guidedfilter), \\
+(pc_4=sumfilter),(pc_5=radiance),(pc_6=grayscale),(gpu=matrix), (n=resource)\bigr\}
+\end{gathered}
+\end{split}
+\end{equation}
+
+\begin{equation}
+\begin{split}
+\begin{gathered}
+(pc_i=darkchannel) \in L_{mutex}(darkchannel, atmosphere, transmission, \\
+guidedfilter, sumfilter,radiance, grayscale, matrix, resource)= \\ 
+\bigl\{(pc_0=darkchannel),(pc_1=atmosphere),(pc_2=transmission), \\
+(pc_3=guidedfilter),(pc_4=sumfilter),(pc_5=radiance),(pc_6=grayscale),\\
+(gpu=matrix), (n=resource)\bigr\} (pc_2=darkchannel) \in L_{mutex}(2, 2, 1)
+\end{gathered}
+\end{split}
+\end{equation}
+
+\begin{equation}
+\begin{split}
+\begin{gathered}
+PA_{mutex}=\bigl\{(pc_i=darkchannel) | i \in\bigl\{0, 1\bigr\}, darkchannel \in \bigl\{1,...,9\bigr\}\bigr\} \\
+\cup \bigl\{(gpu=matrix) | resource \in \bigl\{1,...,21\bigr\}\bigr\} \\
+\cup \bigl\{(n=resource) | resource \in \bigl\{0, 1\bigr\} \bigr\} \cup \bigl\{false\bigr\}
+\end{gathered}
+\end{split}
+\end{equation}
+
+\end{document}
+
+
+>>>>>>> f2525c199a53a1347cfd166a87dd520382da7e56

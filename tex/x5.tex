@@ -1,0 +1,105 @@
+\documentclass{jsarticle}
+\usepackage{multicol}
+\usepackage{amsmath}
+\usepackage{ascmac}
+
+\title{Detailed calculation process and calculation of decomposed minimum unit}
+\author{Hisashi IKARI}
+\date{2017/02/28}
+
+\begin{document}
+
+\part{Detailed calculation process and calculation of decomposed minimum unit}
+\label{Detailed calculation process and calculation of decomposed minimum unit}
+
+Below is a list of calculations that should be satisfied by IMP-X5.
+In addition, the following matches the above and provides matrix operation to the outside.
+And the following functions are all mediators. Therefore, there does not actually calculate anything.
+In addition, simple arithmetic operations can be handled with the following global hooks.
+
+\begin{table}[htb]
+  \caption{Calculation of the minimum unit required for the operation of X5}
+  \begin{tabular} {|c|c|c|c|} \hline
+	Result of Calculation & Name of Caluculation & Arguments, etc \\ \hline
+	- & X5 & const Shape\& dimension, const T initialization=0.0 \\
+	- & X5 & const Shape\& dimension, const PixelPtr\verb*|<|T\verb*|>| initialization \\
+	- & X5 & const ContainerPtr\verb*|<|X5\verb*|<|T\verb*|>|\verb*|>| gpu, bool deepcopy \\
+	- & X5 & const std::string\& name, const Adjust\verb*|<|T\verb*|>|\& adust \\
+	const void & save & const std::string\& name, const Adjust\verb*|<|T\verb*|>|\& adjust \\
+	const void & reshape & const Shape\& dimension \\
+	const void & range & const Shape\& scope \\
+	const void & cumsum & const uint axis \\
+	const void & argsort & const uint axis, const bool reverse \\
+	const void & substitution & const Pixel\verb*|<|T\verb*|>|\& pixel \\
+	const void & substitution & const ContainerPtr\verb*|<|X5\verb*|<|T\verb*|>|\verb*|>| right \\
+	const void & addition & const ContainerPtr\verb*|<|X5\verb*|<|T\verb*|>|\verb*|>| right \\
+	const void & addition & const T right, const bool reverse \\
+	const void & subtraction & const ContainerPtr\verb*|<|X5\verb*|<|T\verb*|>|\verb*|>| right \\
+	const void & subtraction & const T right, const bool reverse \\
+	const void & multiplication & const ContainerPtr\verb*|<|X5\verb*|<|T\verb*|>|\verb*|>| right \\
+	const void & multiplication & const T right, const bool reverse \\
+	const void & division & const ContainerPtr\verb*|<|X5\verb*|<|T\verb*|>|\verb*|>| right \\
+	const void & division & const T right, const bool reverse \\
+	const void & absolute & const ContainerPtr\verb*|<|X5\verb*|<|T\verb*|>|\verb*|>| right \\
+	const void & grayscale & const ContainerPtr\verb*|<|X5\verb*|<|T\verb*|>|\verb*|>| right \\
+	const T & min & - \\
+	const T & max & - \\
+	const PixelPtr\verb*|<|T\verb*|>| & mins & - \\
+	const PixelPtr\verb*|<|T\verb*|>| & maxs & - \\ \hline
+  \end{tabular}
+\end{table}
+
+\begin{table}[htb]
+  \caption{Calculation of the minimum unit required for the operation of fog-removal}
+  \begin{tabular} {|c|c|c|c|} \hline
+	Result of Calculation & Name of Caluculation & Arguments, etc \\ \hline
+	- & Matrix & const Shape\& dimension, const T initialization=0.0 \\
+	- & Matrix & const Shape\& dimension, const PixelPtr\verb*|<|T\verb*|>| initialization \\
+	- & Matrix & const Shape\& dimension, MatrixImplPtr\verb*|<|C, T\verb*|>| impl \\
+	- & Matrix & const Matrix\verb*|<|C, T\verb*|>| matrix, bool deepcopy=true \\
+	static MatrixPtr\verb*|<|C, T\verb*|>| & zeros & const Shape\& dimension \\
+	static MatrixPtr\verb*|<|C, T\verb*|>| & ones & const Shape\& dimension \\
+	MatrixPtr\verb*|<|C, T\verb*|>| & reshape & const Shape\& dimensionv \\
+	MatrixPtr\verb*|<|C, T\verb*|>| & transpose & const Shape\& dimension \\
+	MatrixPtr\verb*|<|C, T\verb*|>| & argsort & const uint axis=0, const bool reverse=false \\
+	MatrixPtr\verb*|<|C, T\verb*|>| & cumsum & const uint axis=0 \\
+	static MatrixPtr\verb*|<|C, T\verb*|>| & load & const std::string\& name, const Adjust\verb*|<|T\verb*|>|\& adjust \\
+	const void  & save & const std::string\& name, const Adjust\verb*|<|T\verb*|>|\& adjust \\
+	static const T & min & const MatrixPtr\verb*|<|C, T\verb*|>| right \\
+	static const T & max & const MatrixPtr\verb*|<|C, T\verb*|>| right \\
+	static const MatrixPtr\verb*|<|C, T\verb*|>| & mins & const MatrixPtr\verb*|<|C, T\verb*|>| right \\
+	static const MatrixPtr\verb*|<|C, T\verb*|>| & maxs & const MatrixPtr\verb*|<|C, T\verb*|>| right \\
+	static MatrixPtr\verb*|<|C, T\verb*|>| & fill & const Shape\& dimension, const MatrixPtr\verb*|<|C, T\verb*|>| right \\
+	static MatrixPtr\verb*|<|C, T\verb*|>| & absolute & const MatrixPtr\verb*|<|C, T\verb*|>| right \\
+	static const MatrixPtr\verb*|<|C, T\verb*|>| & grayscale & const MatrixPtr\verb*|<|C, T\verb*|>| right \\
+	const PixelPtr\verb*|<|R\verb*|>| & at & const uint y, const uint x \\
+	MatrixPtr\verb*|<|C, T\verb*|>| & operator() & const uint y, const uint x \\
+	MatrixPtr\verb*|<|C, T\verb*|>| & operator() & const Shape\& shape \\
+	MatrixPtr\verb*|<|C, T\verb*|>| & operator[] & const uint y \\
+	const void & operator= & const Pixel\verb*|<|T\verb*|>|\& right \\
+	const void & operator= & const MatrixPtr\verb*|<|C, T\verb*|>| right \\ \hline
+  \end{tabular}
+\end{table}
+
+\begin{table}[htb]
+  \caption{Calculation of the minimum unit required for the operation of four arithmetic operations}
+  \begin{tabular} {|c|c|c|c|} \hline
+	Result of Calculation & Name of Caluculation & Arguments, etc \\ \hline
+	MatrixPtr\verb*|<|C, T\verb*|>| & operator+ & const T left, const MatrixPtr\verb*|<|C, T\verb*|>| right \\
+	MatrixPtr\verb*|<|C, T\verb*|>| & operator- & const T left, const MatrixPtr\verb*|<|C, T\verb*|>| right \\
+	MatrixPtr\verb*|<|C, T\verb*|>| & operator* & const T left, const MatrixPtr\verb*|<|C, T\verb*|>| right \\
+	MatrixPtr\verb*|<|C, T\verb*|>| & operator/ & const T left, const MatrixPtr\verb*|<|C, T\verb*|>| right \\
+	MatrixPtr\verb*|<|C, T\verb*|>| & operator+ & const MatrixPtr\verb*|<|C, T\verb*|>| left, const T right \\
+	MatrixPtr\verb*|<|C, T\verb*|>| & operator- & const MatrixPtr\verb*|<|C, T\verb*|>| left, const T right \\
+	MatrixPtr\verb*|<|C, T\verb*|>| & operator* & const MatrixPtr\verb*|<|C, T\verb*|>| left, const T right \\
+	MatrixPtr\verb*|<|C, T\verb*|>| & operator/ & const MatrixPtr\verb*|<|C, T\verb*|>| left, const T right \\
+	MatrixPtr\verb*|<|C, T\verb*|>| & operator+ & const MatrixPtr\verb*|<|C, T\verb*|>| left, const MatrixPtr\verb*|<|C, T\verb*|>| right \\
+	MatrixPtr\verb*|<|C, T\verb*|>| & operator- & const MatrixPtr\verb*|<|C, T\verb*|>| left, const MatrixPtr\verb*|<|C, T\verb*|>| right \\
+	MatrixPtr\verb*|<|C, T\verb*|>| & operator* & const MatrixPtr\verb*|<|C, T\verb*|>| left, const MatrixPtr\verb*|<|C, T\verb*|>| right \\
+	MatrixPtr\verb*|<|C, T\verb*|>| & operator/ & const MatrixPtr\verb*|<|C, T\verb*|>| left, const MatrixPtr\verb*|<|C, T\verb*|>| right \\ \hline
+  \end{tabular}
+\end{table}
+
+\end{document}
+
+

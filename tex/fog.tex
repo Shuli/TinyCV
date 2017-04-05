@@ -1,0 +1,352 @@
+\documentclass{jsarticle}
+\usepackage{multicol}
+\usepackage{amsmath}
+\usepackage{ascmac}
+
+\title{IMP-X5の活用による霧除去の高速化（案）}
+\author{錠 尚史}
+\date{2017/02/15}
+
+\begin{document}
+\maketitle
+
+%\begin{multicols*}{2}
+
+%============================================================================================================================================
+
+\part{はじめに}
+\label{はじめに}
+
+%-------------------------------------------------------------------------------------------------------------------------------------------
+
+\section{並列演算素子}
+\label{並列演算素子}
+
+本件では始まりとしてまず霧の除去の最小の計算手順の実現を行うとともに，その際のボトルネックを明確とし，その後車載機器で利用可能なIMP-X5の性能を利用して霧除去の高速化を行う．特にIMP-X5で高速に並列処理される「１）行列演算」，「２）畳み込み・濾過演算」を利用した高速化を図る．
+
+%============================================================================================================================================
+
+\part{希望するIMP-XP5のAPI}
+\label{希望するIMP-XP5のAPI}
+
+下記の霧除去に関する画像処理のアルゴリズムの計算過程に基づいて，以下のIMP-X5のAPIの利用を希望する．これらのAPIは大きく分けて画像を行列に見立てたプリミティブな「１）行列四則演算」，部分領域内の最小・最大・平均，今後の機械学習系・画像処理系の拡張を想定した畳み込み，これらを提供する「２）各種フィルタ」よりなる．
+
+\begin{table}[htb]
+  \begin{tabular} {|c|c|c|c|} \hline
+    IMP-X5 API & 利用計算過程 & 必須 & APIページ \\ \hline
+    Local Mininum Filter & Dark Channel Prior & 必須（希望） & 268  \\
+    Maximum of Constant Comparison &  Dark Channel Prior & 必須（希望） & 122  \\
+    Local Median Filter &  Dark Channel Prior & 必須（希望） & 291  \\
+    Addition & 全体で利用 & 必須（希望） & 140 \\ 
+    Subtraction & 全体で利用 & 必須（希望） & 141 \\
+    Multiplication & 全体で利用 & 必須（希望） & 147 \\
+    Division & 全体で利用 & 必須（希望） & 177 \\ \hline
+    Subtraction and Absolute Value & Biliteral Filter & 任意 & 142 \\ 
+    Extended Smoothing (5×5 Neighborhood) & Convolution Filter & 任意 & 233 \\ 
+    Local Maximum Filter & Max-Pooling & 任意 & 272 \\ \hline
+  \end{tabular}
+\end{table}
+
+%============================================================================================================================================
+
+\part{霧除去の例}
+\label{霧除去の例}
+
+%-------------------------------------------------------------------------------------------------------------------------------------------
+
+\section{基本的なDark Channel Priorによる霧除去}
+\label{基本的なDark Channel Priorによる霧除去}
+
+本件ではHe\cite{1}らが提案した自然画像の特徴，すなわち部分領域内で最も暗い部分に着目し，その輝度が霧である際にそれに基づいて直接光を得る手法，Dark Channel Priorを用いて霧を除去する．ここで画像$I$は以下の通り，物体からの直接光$J$と霧により分散された光$A$とその重み$t$よりなると仮定する．ここで得たい画像は霧が除去された直接光$J$である．
+\[
+I(x)=J(x)t(x)+A(1-t(x))
+\]
+
+\subsection{霧候補$t$の推定}
+\label{霧候補$t$の推定}
+
+Dark Channel Priorにおいて霧は部分領域内で最も暗い輝度と仮定される．自然画像において，この部分領域内で最も暗い輝度は陰影や対象画像そのもの黒さであることが多く，霧を含む際，部分領域内で最も暗い輝度は前者と比較して高い輝度となる．そのため，本項では，霧を含む領域を抽出するために部分領域内ごとの最小の輝度からなる霧候補$t$を得る．これは前出の画像$I$の定義の部分領域内の最小の輝度を表すため，その最小値は以下に定められる．
+\[
+min_{C\in{r,g,b}}(I^C(x)) = t(x) min_{C\in{r,g,b}}(J^C(x)) + (1-t(x))A^C
+\]
+
+ここでCは色を表し，RGB三原色相当の内で最も小さい値を最小とする．さらに画像全体$x$について部分領域を$y$ととれば，部分領域ごとの最小の輝度は以下に表せられる．
+\[
+min_{y \in \omega(x)} (min_{C \in{r,g,b}}) I^C(y) = t(x) min_{y \in \omega(x)}(min_{C \in{r,g,b}})(J^C(y))) + (1-t(x))A^C
+\]
+\[
+t(x)=1-min_{\omega} (min_{C}(\frac{I^C(y)}{A^C}))
+\]
+
+ここで頻出する$\omega$は部分領域を表し，ラスタ走査に変えてLocal Mininum Filterを用いた部分領域内の最小値の取得，ならびにプリミティブな除算Divisionを用いた高速化を図る．
+
+\begin{itembox}[l]{利用するAPI}
+\[
+Local Mininum Filter，Division
+\]
+\end{itembox}
+
+\subsection{環境光$A$の算出}
+\label{環境光$A$の算出}
+
+環境光$A$は霧により分散された光を表し，その光の輝度の候補は霧候補$t$に含まれる．ただし，その中には真に陰影を表す輝度を含むために，最も輝度の高い1％程度（この値は経験則に基づいた定数となる）の輝度$M$のみを利用する．この際，環境光$A$は$M$の相加平均と表される．ここで任意の回数のLocal Rank Filterの適応により，霧候補$t$から輝度の高い値を抽出し，その相加平均を算出する過程により高速化を図る
+
+\begin{itembox}[l]{利用するAPI}
+\[
+Local Rank Filter（またはCPUベースのソート）
+\]
+\end{itembox}
+
+\subsection{ソフトマッティングによる平滑化}
+\label{ソフトマッティングによる平滑化}
+
+ここまでで得られた霧候補$t$は，$\omega$ごとに求められるためにその隣接部分の差異が大きい．そのために下記のエッジ保存平滑化フィルタの1つであるGuided Filter\cite{2}を用いて$t$を平滑化（ソフトマッティング）する．ここまでで得られた霧候補$t$を$I$とし，平滑化された画像を$q$とおけば，Guided Filterの定義より以下の線形変換モデルが示される．ここで$i$は$I$の位置，$k$は半径$r$の局所正方形$\omega$の位置を表す．
+\[
+q_i = a_k I_i + b_k, \forall i \in \omega_k
+\]
+ここで$q$と$p$の誤差を最小ととれば，以下に$a_k$と$b_k$が求められる．ここで$\mu_k$と$\sigma_k$は局所正方形$\omega$の滑らかさの程度を表す正則化パラメータであり，実際にはそれぞれ$\mu_k$は局所正方形$\omega$の平均，$\sigma_k$は局所正方形$\omega$の分散を表す．
+\[
+a_k = \frac{\frac{1}{|\omega|} \sum_{i \in \omega_k} I_i p_i - \mu_k \overline{p_k}}{\sigma_k^2 + \epsilon},
+b_k = \overline{p_k} - a_k \mu_k
+\]
+これら$a_k$と$b_k$より，平滑化された$q_i$は以下に定められる．ここで$\overline{a_i}$ならびに$\overline{b_i}$は，$i$を中心とおいた際の局所正方形$\omega$の$a_k$と$b_k$からなる平均を表す．
+\[
+q_i = \overline{a_i} I_i + \overline{b_i}
+\]
+上記の定義より，Guided Filterは以下の計算手順となる．これらの手順は局所正方形$\omega$の平均，ならびにそれらの和算，減算，積算，減算よりなるために， Local Median Filter，Addition，Subtraction，Division，Multiplicationを用いた高速化を図る．
+\[
+mean_I = f_{mean}(I,r), mean_p = f_{mean}(p,r)
+\]
+\[
+corr_I = f_{mean}(II,r), corr_{I_{p}} = f_{mean}(Ip,r)
+\]
+\[
+var_I = corr_I - mean_I  mean_I, cov_{I_{p}} = corr_{I_{p}} - mean_I mean_p
+\]
+\[
+a = \frac{cov_{I_{p}}}{(var_I + \epsilon)}, b = mean_p - a  mean_I
+\]
+\[
+mean_a = f_{mean}(a,r), mean_b = f_{mean}(b,r)
+\]
+\[
+q = mean_a  I + mean_b
+\]
+
+\begin{itembox}[l]{利用するAPI}
+\[
+Local Median Filter，Addition，Subtraction，Division，Multiplication
+\]
+\end{itembox}
+
+\subsection{霧の除去}
+\label{霧の除去}
+
+上記より，霧候補$t$と環境光$A$が求められたため，霧が除去された直接光$J$の画像が求まる．直接光$J$は$I(x)=J(x)t(x)+A(1-t(x))$より以下に導かれる．
+\[
+J(x)=\frac{I(x)-A}{max(t(x), t_0)} + A,(t_0=0.1)
+\]
+
+ここでmaxについてMaximum of Constant Comparison，それぞれの加算と減算と除算についてAddition，Subtraction，Divisionを用いた高速化を図る．
+
+\begin{itembox}[l]{利用するAPI}
+\[
+Maximum of Constant Comparison， Addition，Subtraction，Division
+\]
+\end{itembox}
+
+%-------------------------------------------------------------------------------------------------------------------------------------------
+
+\section{基本的なBiliteral Filterによる霧除去の拡張（$A$の拡張，付録として添付）}
+\label{基本的なBiliteral Filterによる霧除去の拡張（$A$の拡張，付録として添付）}
+
+Dark Channel Pirorにて求められる画像$I$は，その定義の通り$I(x)=J(x)t(x)+A(1-t(x))$と求められる．ただし環境光$A$は$t$の内，最も輝度の高い1％の相加平均により求まり，複雑に建造物が入り組んだ場面の環境光の偏り，日射角における環境光の偏りは考慮されていない．そのため，本件では環境光$A$についてBiliteral Filterによる補正を加えて霧除去の改善を行う．
+
+\subsection{Biliteral Filter}
+\label{Biliteral Filter}
+
+一般に利用される平坦化のためのフィルタリングは，ガウス関数の勾配の滑らかさを利用して実現する．例えば，隣接する画素の輝度をガウス関数を用いて平坦化する．ただし，ガウス関数は指数関数に基づく勾配に従い，急な輝度の勾配についても同様に平坦化する．そのため，画像において重要なエッジについても平坦化される．これは隣接する画素の位置関係にのみ注目しているためであり，Biliteral Filterはさらに位置関係に加えて，輝度の差を考慮した平坦化を行う．これにより画像において重要なエッジについては平坦化されず，それ以外の輝度が類似した領域について平坦化される．さらにここでBiliteral Filterに与えるガウス関数の分散を多く取れば，より強い平坦化が行われてエッジが保持されたトーンマッピングに近い平坦化となる．本件では霧候補に加える補整としての環境光$A$を得たいため，環境光$A$の輝度は直接光$J$にエッジを変えない程度に変化せずに平坦化されており，かつ建造物などの境目であるエッジが保持された環境光が望ましい．そのため，下記のBiliteral Filterを用いて環境光$A$を得る．
+
+Biliteral Filter\cite{3}は以下に定義される．第一項は位置関係に基づいた輝度の平坦化，第二項は色に基づいた平坦化を表し，特に第二項の色は第一項の位置関係に基づいた平坦化について，輝度の変化を留める重みとなる．ここで$\sigma_s$ならびに$S$は位置の幅，$\sigma_r$は値の幅，$p$と$q$はそれぞれ画素の位置，$I_p$と$I_q$はその色（輝度）を表している．
+\[
+BF[I]_p = \frac{1}{W_p} \sum_{q \in S} G_{\sigma_s}(||p-q||) G_{\sigma_r}(|I_p-I_q|)I_q
+\]
+\[
+W_p = \sum_{q \in S}G_{\sigma_s}(||p-q||) G_{\sigma_r}(|I_p-I_q|)
+\]
+
+Biliteral Filterは，第一項の位置の範囲にガウス関数を適応，すなわちガウシアンフィルタの適応を行い，続けて第二項の色の範囲についてもガウシアンフィルタを適応，それらの積より実現される．そのため，Laplacian，Addition，Multiplicationを用いた高速化を図る．
+
+\begin{itembox}[l]{利用するAPI}
+\[
+Laplacian，Addition，Multiplication
+\]
+\end{itembox}
+
+%-------------------------------------------------------------------------------------------------------------------------------------------
+
+\section{機械学習による霧除去の拡張（$t$の拡張，付録として添付））}
+\label{機械学習による霧除去の拡張（$t$の拡張，付録として添付）}
+
+Dark Channel Pirorにて求められる画像$I$は，その定義の通り$I(x)=J(x)t(x)+A(1-t(x))$と求められる．また，機械学習で求められる教師信号$z$と入力$x$の関係もまた$z=Wx+b$と定められる．ここで$(1-t(x))$を別途求められた$t(x)$の利用を前提すれば，霧を含む画像$z$と霧を含まない画像$x$より，霧候補$W$を一般的な機械学習の学習過程を用いて求められると仮定する．本件ではこの$W$について様々な機械学習の手法を用いた改善を行う．下記では基本的な実ニューラルネットワーク\cite{4}を題材とする．
+
+\subsection{判別・識別過程}
+\label{判別・識別過程}
+
+判別・識別を行うための基本計算手順は，入力$x$について学習過程で得られた$W$とバイアス$b$により，活性化関数を用いて出力$z$を得る手順となる．この際，単体のニューロンを用いて単数の入出力を$x,z$とおけば$h(Wx+b)$となり，複数の活性化関数を用いて複数の入出力を$\sum_{i} x_i,z$とおけば$h(\sum_{i} W_{ji} x_{i} + b_{j})$となる．ここで基本計算手順を多層として表せば，$z=h_2(W_2 h_1(W_1x+b_1) + b_2)$すなわち結合関数として表せられる．
+\[
+z=f(x)=h(W x + b),
+z_j=h(\sum_{i} W_{ji} x_{i} + b_{j}),
+z=h_2(W_2 h_1(W_1x+b_1) + b_2)
+\]
+ここでこれらの判別・識別過程について，Addition，Multiplicationを用いた高速化を図る．
+
+\begin{itembox}[l]{利用するAPI}
+\[
+Addition，Multiplication
+\]
+\end{itembox}
+
+\subsubsection{活性化関数}
+\label{活性化関数}
+
+活性化関数は，単数の入力$x$についてその活性化の形態に応じた出力$z$を返す写像関数を指す．そのため活性化関数に与える値は$a_{j}$，活性化関数は$h(a_{j})$と表される．この活性化関数$h(a_{j})$は幾種類かの入力$x$について与えられた出力$z$を返すため，活性に至るまで線形よりも幅を持つことが望ましく，下記の非線形写像の関数が適している．
+\[
+a_{j}=\sum_{i} W_{ji} x_{i} + b_{j},
+f(x)=h(a)
+\]
+\[
+ReLU(a_j) = max(0,a_j)
+\]
+ここで活性化関数の内，良く利用されるReLU関数について，Maximum of Constant Comparisonを用いた高速化を図る．
+
+\begin{itembox}[l]{利用するAPI}
+\[
+Maximum of Constant Comparison
+\]
+\end{itembox}
+
+\subsection{学習過程}
+\label{学習過程}
+
+学習過程は，単数の入出力$a_j,z$についてそれらを満たす重み$W_{ji}$ならびにバイアス$b_j$を求める過程を指す．ただし，活性化された出力について，逆関数相当の幾種類かの入力を解析的に求めることは困難であり，以下の微分された活性化関数に基づき，望む出力と活性化関数の出力の誤差を減らす最適化手法（演算）を行う．一般に学習過程はこの誤差を最小とする最適化手法（演算）を指す．
+
+\subsubsection{微分された活性化関数}
+\label{微分された活性化関数}
+
+活性化関数はおおよそネイピア数を底とした自然指数関数として表される．そのため，以下に微分の導関数が得られる．
+\[
+\frac{\partial ReLU(a_j)}{\partial a_j} =
+\begin{cases}
+1 & \text{$h(a_{j}$) $>$ 0} \\
+0 & \text{otherwise}
+\end{cases}
+\]
+ここでもしあるなれば，ある定数を閾としたsign関数相当のAPIを用いた高速化を図る．
+
+\begin{itembox}[l]{利用するAPI}
+\[
+Sign（当該がみつからないためご意見伺いの記録のみ）
+\]
+\end{itembox}
+
+\subsubsection{誤差（損失）関数}
+\label{誤差（損失）関数}
+
+出力は目的とする出力$t$と，活性化関数で得られる出力$z$の二種が存在する．誤差はこの$t$と$z$の差を表し，その程度を誤差（損失）関数の尺度で表す．本件はこの誤差（損失）関数について，二乗誤差を対象とする．通常，中間層の活性化関数の数を考慮してクロスエントロピーを利用するが，ここでは簡単のためにMSEを対象としている．
+\[
+E_n=\frac{1}{2} \sum_n \sum_k (z_{nk} - t_{nk})^2
+\]
+
+ここで二乗誤差の算出について，Subtraction，Multiplicationを用いた高速化を図る．
+
+\begin{itembox}[l]{利用するAPI}
+\[
+Subtraction，Multiplication
+\]
+\end{itembox}
+
+\subsection{最適化手法（演算）}
+\label{最適化手法（演算）}
+
+最適化手法には大きく分けて，求められた任意の誤差について学習係数をとり，誤差を最小とする誤差の変動が固定的な確率的勾配降下法と，誤差の更新の頻度により幅を変動する誤差の変動が可変的なAdaGradなどの最適化手法がある．特に近年，下記の誤差$E$について最小を厳密に得ずとも，任意の誤差の利用で最適化が行われることが知られており，本件においても最適化手法には任意の誤差の利用に基づいた確率的勾配降下法を利用する．
+\[
+W_{ij} \leftarrow W_{ij} - \alpha \frac{\partial E_n}{\partial W_{ij}} - \alpha \lambda W_{ij}
+\]
+
+\subsubsection{逆伝搬学習法}
+\label{逆伝搬学習法}
+
+学習の過程における出力$z$と入力$x$を満たす重み$W$とバイアス$b$は，出力から入力にかけて逆関数を得る様に誤差を減少させて得る．そのため一般にこの学習過程を誤差逆伝搬と呼ぶ．学習過程における逆伝搬学習法では誤差（損失）を最小とするための重み$W$を目的とするため，上記の誤差（損失）関数を重みで微分した値$\frac{\partial E_n}{\partial W_{ji}}$を必ず必要とする．ここで望む出力は学習過程において求められる出力$a_j$とその望む出力との誤差$E_n$となるため，連鎖則より以下に表せられる．
+\[
+\frac{\partial E_n}{\partial W_{ji}} = \frac{\partial E_n}{\partial a_j} \frac{\partial a_j}{\partial W_{ji}} = \frac{\partial E_n}{\partial a_j} z_i
+\]
+\[
+\delta_j = \frac{\partial E_n}{\partial a_j}, \frac{\partial E_n}{\partial W_{ji}} =\delta_j z_i
+\]
+さらに$\delta_j$の定義を多層の結合関数の伝搬に拡張して連鎖則をとれば，$a_j$の誤差と下層の$a_k$との誤差の和と表される．ここで$a_k$は$a_j$の出力$h(a_j)$に基づいて$a_k=\sum_{j} W_{kj} h(a_j)$であるから，下記の通り，$\delta_j$は$a_j$とその出力の誤差$\frac{\partial h}{\partial a_j}$と$a_k$の誤差の積，すなわち$\sum_k W_{kj} \frac{\partial E_n}{\partial a_k}$の積と示される．ここですべての層における誤差の算出は下層の誤差に基づいて行われると示される．つまりすべての層において，出力から入力の誤差を順次伝搬させることにより，すべての層の$W$と$b$が算出可能である．
+\[
+\delta_j = \sum_{k} \frac{\partial E_n}{\partial a_k} \frac{\partial a_k}{\partial a_j}
+\]
+\[
+\delta_j = \frac{\partial h}{\partial a_j} \sum_k W_{kj} \frac{\partial E_n}{\partial a_k}
+\]
+\[
+a_k=\sum_j W_{kj} z_{j} = \sum_j W_{kj} h(a_j)
+\]
+
+\subsubsection{正準連結関数}
+\label{正準連結関数}
+
+さらに最も下層の出力$t$から誤差$\delta_j$を求める際は，$\delta_j = \sum_k \frac{\partial E_n}{\partial a_k} \frac{\partial a_k}{\partial a_j}$より，$a_k$を$y_k$すなわち教師信号$y_k$とおき，$\delta_j = \frac{\partial E_n}{\partial y_k} \frac{\partial y_k}{\partial a_j}$と求められる．この際，活性化関数を非線形関数すなわち指数分布関数とおいているため，活性化関数の逆関数相当の連結関数を定められる．ここで指数分布関数$g(\mu)$の連結関数は$g(\mu)=-\mu$となる．これらの活性化関数と連結関数の関連より，例えば$E$にクロスエントロピー，活性化関数$h$にsoftmax関数をもちいれば，$\delta_j = \sum_k \frac{y_k-t_k}{y_k(1-y_k)} I_{kj} y_k (1-y_k)$，すなわち$y_j-t_j$に帰着する．つまり誤差の算出を教師信号$y_k$と出力$t$の差に落とし込める．このように誤差（損失）関数と正準連結となる活性化関数をもちいることで誤差の算出のコストを軽減できる．
+\[
+\delta_j = \sum_k \frac{\partial E_n}{\partial a_k} \frac{\partial a_k}{\partial a_j},
+\delta_j = \frac{\partial E_n}{\partial y_k} \frac{\partial y_k}{\partial a_j}
+\]
+\[
+\delta_j = \sum_k \frac{y_k-t_k}{y_k(1-y_k)} I_{kj} y_k (1-y_k) = y_j - t_j
+\]
+ここで正準連結関数より誤差は減算に帰着されるため，Subtractionを用いた高速化を図る．
+\begin{itembox}[l]{利用するAPI}
+\[
+Subtraction
+\]
+\end{itembox}
+
+%============================================================================================================================================
+
+\part{霧除去におけるボトルネック}
+\label{霧除去におけるボトルネック}
+
+%-------------------------------------------------------------------------------------------------------------------------------------------
+
+\section{基本的なDark Channel Priorにおけるボトルネック}
+\label{基本的なDark Channel Priorにおけるボトルネック}
+
+上記のDark Channel Priorの計算時間を1つのCPUで計測した参考例を以下に記す．ここで対象とした画像は1024x768の0.4倍サイズ，すなわち410x308サイズ，画素の値は32ビット浮動小数点で表している．
+
+\begin{table}[htb]
+  \begin{center}
+    \begin{tabular} {|c|c|r|c|} \hline
+      計算過程 & 対象演算 & CPU時間(ms) & 備考 \\ \hline
+      霧候補$t$の推定 & $t$ & 329.4 & 霧候補$t$は計2回の演算を行う \\
+      環境光$A$の算出 & $A$ & 7.8 & 環境光$A$は計2回の演算を行う \\
+      ソフトマッティングによる平滑化 & $q$ & 289.9 & \\
+      霧の除去 & $J$ & 3.5 & \\ \hline
+    \end{tabular}
+  \end{center}
+\end{table}
+
+%============================================================================================================================================
+
+\part{引用・参考}
+\label{引用・参考}
+
+\begin{thebibliography}{9}
+\bibitem{1} Kaiming He, Jian Sun, and Xiaoou Tang, “Single Image Haze Removal Using Dark Channel Prior”, IEEE,  2011.
+\bibitem{2} Kaiming He, Jian Sun, “FastGuidedFilter”, Microsoft, 2015.
+\bibitem{3} Carlo Tomasi and Roberto Manduchi, “Bilateral filtering for gray and color images,” in Computer Vision, 1998. Sixth International Conference on . IEEE, 1998, pp. 839– 846.
+\bibitem{4} Y. LeCun; B. Boser; J. S. Denker; D. Henderson; R. E. Howard; W. Hubbard; L. D. Jackel (1989). “Backpropagation applied to handwritten zip code recognition”. Neural Computation 1 (4): 541-551.
+\end{thebibliography}
+
+\end{document}

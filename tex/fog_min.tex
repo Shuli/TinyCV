@@ -1,0 +1,192 @@
+\documentclass{jsarticle}
+\usepackage{multicol}
+\usepackage{amsmath}
+\usepackage{ascmac}
+
+\title{IMP-X5の活用による霧除去の高速化（案）}
+\author{錠 尚史}
+\date{2017/02/15}
+
+\begin{document}
+\maketitle
+
+%\begin{multicols*}{2}
+
+%============================================================================================================================================
+
+\part{はじめに}
+\label{はじめに}
+
+%-------------------------------------------------------------------------------------------------------------------------------------------
+
+\section{並列演算素子}
+\label{並列演算素子}
+
+本件では始まりとしてまず霧の除去の最小の計算手順の実現を行うとともに，その際のボトルネックを明確とし，その後車載機器で利用可能なIMP-X5の性能を利用して霧除去の高速化を行う．特にIMP-X5で高速に並列処理される「１）行列演算」，「２）畳み込み・濾過演算」をできる限り利用した高速化を図る．
+
+%============================================================================================================================================
+
+\part{希望するIMP-XP5のAPI}
+\label{希望するIMP-XP5のAPI}
+
+下記の霧除去に関する画像処理のアルゴリズムの計算過程に基づいて，以下のIMP-X5のAPIの利用を希望する．これらのAPIは大きく分けて画像を行列に見立てた利用形態をとるプリミティブな「１）行列四則演算」，部分領域内の最小・最大・平均，今後の機械学習系・画像処理系の拡張を想定した畳み込み，これらを提供する「２）各種フィルタ」よりなる．
+
+\begin{table}[htb]
+  \begin{tabular} {|c|c|c|c|} \hline
+    IMP-X5 API & 利用計算過程 & 必須 & APIページ \\ \hline
+    Local Mininum Filter & Dark Channel Prior & 必須（希望） & 268  \\
+    Maximum of Constant Comparison &  Dark Channel Prior & 必須（希望） & 122  \\
+    Local Median Filter &  Dark Channel Prior & 必須（希望） & 291  \\
+    Addition & 全体で利用 & 必須（希望） & 140 \\ 
+    Subtraction & 全体で利用 & 必須（希望） & 141 \\
+    Multiplication & 全体で利用 & 必須（希望） & 147 \\
+    Division & 全体で利用 & 必須（希望） & 177 \\ \hline
+    Subtraction and Absolute Value & Biliteral Filter & 任意 & 142 \\ 
+    Extended Smoothing (5×5 Neighborhood) & Convolution Filter & 任意 & 233 \\ 
+    Local Maximum Filter & Max-Pooling & 任意 & 272 \\ \hline
+  \end{tabular}
+\end{table}
+
+%============================================================================================================================================
+
+\part{霧除去の例}
+\label{霧除去の例}
+
+%-------------------------------------------------------------------------------------------------------------------------------------------
+
+\section{基本的なDark Channel Priorによる霧除去}
+\label{基本的なDark Channel Priorによる霧除去}
+
+本件ではHe\cite{1}らが提案した自然画像の特徴，すなわち部分領域内で最も暗い部分に着目し，その輝度が霧である際にそれに基づいて直接光を得る手法，Dark Channel Priorを用いて霧を除去する．ここで画像$I$は以下の通り，物体からの直接光$J$と霧により分散された光$A$とその重み$t$よりなると仮定する．ここで得たい画像は霧が除去された直接光$J$である．
+\[
+I(x)=J(x)t(x)+A(1-t(x))
+\]
+
+\subsection{霧候補$t$の推定}
+\label{霧候補$t$の推定}
+
+Dark Channel Priorにおいて霧は部分領域内で最も暗い輝度と仮定される．自然画像において，この部分領域内で最も暗い輝度は陰影や対象画像そのもの黒さであることが多く，霧を含む際，部分領域内で最も暗い輝度は前者と比較して高い輝度となる．そのため，本項では，霧を含む領域を抽出するために部分領域内ごとの最小の輝度からなる画像を得る．これは前出の画像$I$の定義の部分領域内の最小の輝度を表すため，その最小値は以下に定められる．
+\[
+min_{C\in{r,g,b}}(I^C(x)) = t(x) min_{C\in{r,g,b}}(J^C(x)) + (1-t(x))A^C
+\]
+
+ここでCは色を表し，RGB三原色相当の内で最も小さい値を最小とする．さらに画像全体$x$について部分領域を$y$ととれば，部分領域ごとの最小の輝度は以下に表せられる．
+\[
+min_{y \in \omega(x)} (min_{C \in{r,g,b}}) I^C(y) = t(x) min_{y \in \omega(x)}(min_{C \in{r,g,b}})(J^C(y))) + (1-t(x))A^C
+\]
+\[
+t(x)=1-min_{\omega} (min_{C}(\frac{I^C(y)}{A^C}))
+\]
+
+ここで頻出する$\omega$は部分領域を表し，ラスタ走査に変えてLocal Mininum Filterを用いた部分領域内の最小値の取得，ならびにプリミティブな除算Divisionにより高速化する．
+
+\begin{itembox}[l]{利用するAPI}
+\[
+Local Mininum Filter, Division
+\]
+\end{itembox}
+
+\subsection{環境光$A$の算出}
+\label{環境光$A$の算出}
+
+環境光$A$は霧により分散された光を表し，その光の輝度の候補は霧候補$t$に含まれる．ただし，その中には真に陰影を表す輝度を含むために，最も輝度の高い1％程度（この値は経験則に基づいた定数となる）の輝度$M$のみを利用する．この際，環境光$A$は$M$の相加平均と表される．ただし，これはソーティングと行列の変換に基づき算出され，これらはIMP-X5のAPIに合致しないため，CPUベースの並列行列演算を用いて高速化を図る．
+
+\begin{itembox}[l]{利用するAPI}
+\[
+なし（CPUベース）
+\]
+\end{itembox}
+
+\subsection{ソフトマッティングによる平滑化}
+\label{ソフトマッティングによる平滑化}
+
+ここまでで得られた霧候補$t$は，$\omega$ごとに求められるためにその隣接部分の差異が大きい．そのために下記のエッジ保存平滑化フィルタの1つであるGuided Filter\cite{2}を用いて$t$を平滑化（ソフトマッティング）する．ここまでで得られた霧候補$t$を$I$とし，平滑化された画像を$q$とおけば，Guided Filterの定義より以下の線形変換モデルが示される．ここで$i$は$I$の位置，$k$は半径$r$の局所正方形$\omega$の位置を表す．
+\[
+q_i = a_k I_i + b_k, \forall i \in \omega_k
+\]
+ここで$q$と$p$の誤差を最小ととれば，以下に$a_k$と$b_k$が求められる．ここで$\mu_k$と$\sigma_k$は局所正方形$\omega$の滑らかさの程度を表す正則化パラメータであり，実際にはそれぞれ$\mu_k$は局所正方形$\omega$の平均，$\sigma_k$は局所正方形$\omega$の分散を表す．
+\[
+a_k = \frac{\frac{1}{|\omega|} \sum_{i \in \omega_k} I_i p_i - \mu_k \overline{p_k}}{\sigma_k^2 + \epsilon},
+b_k = \overline{p_k} - a_k \mu_k
+\]
+これら$a_k$と$b_k$より，平滑化された$q_i$は以下に定められる．ここで$\overline{a_i}$ならびに$\overline{b_i}$は，$i$を中心とおいた際の局所正方形$\omega$の$a_k$と$b_k$からなる平均を表す．
+\[
+q_i = \overline{a_i} I_i + \overline{b_i}
+\]
+上記の定義より，Guided Filterは以下の計算手順となる．これらの手順は局所正方形$\omega$の平均，ならびにそれらの和算，減算，積算，減算よりなるために， Local Median Filter，Addition，Subtraction，Division，Multiplicationを用いて高速化を図る．
+\[
+mean_I = f_{mean}(I,r), mean_p = f_{mean}(p,r)
+\]
+\[
+corr_I = f_{mean}(II,r), corr_{I_{p}} = f_{mean}(Ip,r)
+\]
+\[
+var_I = corr_I - mean_I  mean_I, cov_{I_{p}} = corr_{I_{p}} - mean_I mean_p
+\]
+\[
+a = \frac{cov_{I_{p}}}{(var_I + \epsilon)}, b = mean_p - a  mean_I
+\]
+\[
+mean_a = f_{mean}(a,r), mean_b = f_{mean}(b,r)
+\]
+\[
+q = mean_a  I + mean_b
+\]
+
+\begin{itembox}[l]{利用するAPI}
+\[
+Local Median Filter，Addition，Subtraction，Division，Multiplication
+\]
+\end{itembox}
+
+\subsection{霧の除去}
+\label{霧の除去}
+
+上記より，霧候補$t$と環境光$A$が求められたため，霧が除去された直接光$J$の画像が求まる．直接光$J$は$I(x)=J(x)t(x)+A(1-t(x))$より以下に導かれる．
+\[
+J(x)=\frac{I(x)-A}{max(t(x), t_0)} + A,(t_0=0.1)
+\]
+
+ここでmaxについてMaximum of Constant Comparison，それぞれの加算と減算と除算についてAddition，Subtraction，Divisionを用いて高速化を図る．
+
+\begin{itembox}[l]{利用するAPI}
+\[
+Maximum of Constant Comparison, Addition，Subtraction，Division
+\]
+\end{itembox}
+
+%============================================================================================================================================
+
+\part{霧除去におけるボトルネック}
+\label{霧除去におけるボトルネック}
+
+%-------------------------------------------------------------------------------------------------------------------------------------------
+
+\section{基本的なDark Channel Priorにおけるボトルネック}
+\label{基本的なDark Channel Priorにおけるボトルネック}
+
+上記のDark Channel Priorの計算時間を1つのCPUで計測した参考例を以下に記す．ここで対象とした画像は1024x768の0.4倍サイズ，すなわち410x308サイズ，画素の値は32ビット浮動小数点で表している．
+
+\begin{table}[htb]
+  \begin{center}
+    \begin{tabular} {|c|c|r|c|} \hline
+      計算過程 & 対象演算 & CPU時間(ms) & 備考 \\ \hline
+      霧候補tの推定 & $t$ & 329.4 & 霧候補$t$は2回の演算を行う \\
+      環境光Aの算出 & $A$ & 7.8 & 環境光$A$は2回の演算を行う \\
+      ソフトマッティングによる平滑化 & $q$ & 289.9 & \\
+      霧の除去 & $J$ & 3.5 & \\ \hline
+    \end{tabular}
+  \end{center}
+\end{table}
+
+%============================================================================================================================================
+
+\part{引用・参考}
+\label{引用・参考}
+
+\begin{thebibliography}{9}
+\bibitem{1} Kaiming He, Jian Sun, and Xiaoou Tang, 『Single Image Haze Removal Using Dark Channel Prior』, IEEE,  2011.
+\bibitem{2} Kaiming He, Jian Sun, 『FastGuidedFilter』, Microsoft, 2015.
+\end{thebibliography}
+
+\end{document}

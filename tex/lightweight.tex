@@ -1,0 +1,181 @@
+\documentclass{jsarticle}
+\usepackage{multicol}
+\usepackage{amsmath}
+\usepackage{ascmac}
+
+\title{車載機器のための軽量化された深層学習の判別の実現（案）}
+\author{錠 尚史}
+\date{2017/01/30}
+
+\begin{document}
+\maketitle
+
+%\begin{multicols*}{2}
+
+\part{はじめに}
+\label{はじめに}
+
+近年，深層学習の受容野による一般動画像の判別ならびに識別の能力は著しく向上している．特に人の顔の判別に関すれば，その精度は96％に達し，既に人の顔の判別の能力を超える段階に達している．そのため，自動運転の場においてその能力を利用したいとする要求は高い．しかしながら，深層学習の判別ならびに識別を行うための学習過程の計算コストは数日，場合により数か月と高く，計算リソースが限られた車載機器においての深層学習の直接の利用は困難である．
+
+そのため，本件では，特に計算コストが高い学習過程を別途計算機資源で実施し，比較的計算コストが少ない判別を車載機器上で実現できる軽量深層学習を提案する．特に深層学習は判別ならびに識別に関する基本理論において実ニューラルネットワークの流れを汲み，実現上，大きな計算の手順は必要としない．この基本部分について最小の計算手順の実現を行い，車載機器でも動作可能な深層学習を実現する．
+
+\section{並列演算素子}
+\label{並列演算素子}
+
+本件では最小の計算手順の実現を行うとともに，車載機器で利用可能なIMP-X5の性能を利用して，深層学習の判別の高速化を試みる．特にIMP-X5で高速に並列処理される１）特徴点検出演算，２）行列・ベクトル演算，３）畳込・濾過演算らをできる限り利用する．
+
+\part{深層学習の基本計算手順}
+\label{深層学習の基本計算手順}
+
+深層学習は大きく分けて，１）各ニューロンの重みと入力からなる判別・識別，２）各ニューロンの判別・識別を決定付ける活性化関数，３）正解と入力が与えられた際の各ニューロンの重みの学習過程，４）正解と入力が与えられた際の各ニューロンの損失関数，からなる．この内，車載機器上の演算を想定する軽量深層学習は１）２），それ以外の別途計算機資源上の演算を想定する深層学習は３）４）に相当する．以下にその１）２）の最小の計算手順ならびに３）４）の計算手順を記す．
+
+\section{判別・識別過程}
+\label{判別・識別過程}
+
+判別・識別を行うための基本計算手順は，入力$x$について学習過程で得られた$W$とバイアス$b$により，活性化関数を用いて出力$z$を得る手順となる．この際，単体のニューロンを用いて単数の入出力を$x,z$とおけば$h(Wx+b)$となり，複数の活性化関数を用いて複数の入出力を$\sum_{i} x_i,z$とおけば$h(\sum_{i} W_{ji} x_{i} + b_{j})$となる．ここで基本計算手順を多層として表せば，$z=h_2(W_2 h_1(W_1x+b_1) + b_2)$すなわち結合関数として表せられる．
+
+\[
+z=f(x)=h(W x + b),
+z_j=h(\sum_{i} W_{ji} x_{i} + b_{j}),
+z=h_2(W_2 h_1(W_1x+b_1) + b_2)
+\]
+
+\section{活性化関数}
+\label{活性化関数}
+
+活性化関数は，単数の入力$x$についてその活性化の形態に応じた出力$z$を返す写像関数を指す．そのため活性化関数に与える値は$a_{j}$，活性化関数は$h(a_{j})$と表される．この活性化関数$h(a_{j})$は幾種類かの入力$x$について与えられた出力$z$を返すため，活性に至るまで線形よりも幅を持つことが望ましく，下記の非線形写像の関数が適している．
+
+\[
+a_{j}=\sum_{i} W_{ji} x_{i} + b_{j},
+f(x)=h(a)
+\]
+
+\begin{itembox}[l]{Sigmoid}
+\[
+h(a_j)=\frac{1}{1+e^{-a_j}}
+\]
+\end{itembox}
+
+\begin{itembox}[l]{Softmax}
+\[
+h(a_j)=\frac{e^{a_j}}{\sum_{k} e^{a_k}}
+\]
+\end{itembox}
+
+\begin{itembox}[l]{ReLU}
+\[
+h(a_j)=max(0,a_j)
+\]
+\end{itembox}
+
+\section{学習過程}
+\label{学習過程}
+
+学習過程は，単数の入出力$a_j,z$についてそれらを満たす重み$W_{ji}$ならびにバイアス$b_j$を求める過程を指す．ただし，活性化された出力について，逆関数相当の幾種類かの入力を解析的に求めることは困難であり，以下の微分された活性化関数に基づき，望む出力と活性化関数の出力の誤差を減らす最適化手法（演算）を行う．一般に学習過程はこの誤差を最小とする最適化手法（演算）を指す．
+
+\subsection{微分された活性化関数}
+\label{微分された活性化関数}
+
+活性化関数はおおよそネイピア数を底とした自然指数関数として表される．そのため，以下に微分の導関数が得られる．
+
+\begin{itembox}[l]{Sigmoid}
+\[
+\frac{\partial h(a_j)}{\partial a_j} = h(a_j) (1-h(a_j))
+\]
+\end{itembox}
+
+\begin{itembox}[l]{Softmax}
+\[
+\frac{\partial h(a_j)}{\partial a_j} = h(a_k)(I_{kj} - h(a_j)), 
+I_{kj}=\begin{cases}
+1 & \text{k=j} \\
+0 & \text{otherwise}
+\end{cases}
+\]
+\end{itembox}
+
+\begin{itembox}[l]{ReLU}
+\[
+\frac{\partial h(a_j)}{\partial a_j} =
+\begin{cases}
+1 & \text{$h(a_{j}$) $>$ 0} \\
+0 & \text{otherwise}
+\end{cases}
+\]
+\end{itembox}
+
+\subsection{誤差（損失）関数}
+\label{誤差（損失）関数}
+
+出力は目的とする出力$t$と，活性化関数で得られる出力$z$の二種が存在する．誤差はこの$t$と$z$の差を表し，その程度を誤差（損失）関数の尺度で表す．本件はこの誤差（損失）関数について，二乗誤差と対数尤度に基づいたクロスエントロピーの二種を対象とする．特にクロスエントロピーは，適した活性化関数の個数が考慮されるために重要な誤差（損失）関数と位置付ける．
+
+\begin{itembox}[l]{Mean Squared Error (MSE)}
+\[
+E_n=\frac{1}{2} \sum_n \sum_k (z_{nk} - t_{nk})^2
+\]
+\end{itembox}
+
+\begin{itembox}[l]{Cross-Entropy}
+\[
+E_n=- \sum_{k} t_{nk} \ln z_{nk}
+\]
+\end{itembox}
+
+\subsection{最適化手法（演算）}
+\label{最適化手法（演算）}
+
+最適化手法には大きく分けて，求められた任意の誤差について学習係数をとり，誤差を最小とする誤差の変動が固定的な確率的勾配降下法と，誤差の更新の頻度により幅を変動する誤差の変動が可変的なAdaGradなどの最適化手法がある．特に近年，下記の誤差$E$について最小を厳密に得ずとも，任意の誤差の利用で最適化が行われることが知られており，本件においても最適化手法には任意の誤差の利用に基づいた確率的勾配降下法を利用する．本件では代表的な確率的勾配降下法とAdaGradを対象とする．
+
+\begin{itembox}[l]{確率的勾配降下法}
+\[
+W_{ij} \leftarrow W_{ij} - \alpha \frac{\partial E_n}{\partial W_{ij}} - \alpha \lambda W_{ij}
+\]
+\end{itembox}
+
+\begin{itembox}[l]{AdaGrad}
+\[
+G_{ij} \leftarrow G_{ij} + (\frac{E_n}{W_{ij}})^2,
+W_{ij} \leftarrow W_{ij} - \frac{\alpha}{\sqrt{G_{ij}}} \frac{\partial E_n}{\partial W_{ij}}
+\]
+\end{itembox}
+
+\subsection{逆伝搬学習法}
+\label{逆伝搬学習法}
+
+学習の過程における出力$z$と入力$x$を満たす重み$W$とバイアス$b$は，出力から入力にかけて逆関数を得る様に誤差を減少させて得る．そのため一般にこの学習過程を誤差逆伝搬と呼ぶ．学習過程における逆伝搬学習法では誤差（損失）を最小とするための重み$W$を目的とするため，上記の誤差（損失）関数を重みで微分した値$\frac{\partial E_n}{\partial W_{ji}}$を必ず必要とする．ここで望む出力は学習過程において求められる出力$a_j$とその望む出力との誤差$E_n$となるため，連鎖則より以下に表せられる．
+
+\[
+\frac{\partial E_n}{\partial W_{ji}} = \frac{\partial E_n}{\partial a_j} \frac{\partial a_j}{\partial W_{ji}} = \frac{\partial E_n}{\partial a_j} z_i
+\]
+\[
+\delta_j = \frac{\partial E_n}{\partial a_j}, \frac{\partial E_n}{\partial W_{ji}} =\delta_j z_i
+\]
+
+さらに$\delta_j$の定義を多層の結合関数の伝搬に拡張して連鎖則をとれば，$a_j$の誤差と下層の$a_k$との誤差の和と表される．ここで$a_k$は$a_j$の出力$h(a_j)$に基づいて$a_k=\sum_{j} W_{kj} h(a_j)$であるから，下記の通り，$\delta_j$は$a_j$とその出力の誤差$\frac{\partial h}{\partial a_j}$と$a_k$の誤差の積，すなわち$\sum_k W_{kj} \frac{\partial E_n}{\partial a_k}$の積と示される．ここですべての層における誤差の算出は下層の誤差に基づいて行われると示される．つまりすべての層において，出力から入力の誤差を順次伝搬させることにより，すべての層の$W$と$b$が算出可能である．
+
+\[
+\delta_j = \sum_{k} \frac{\partial E_n}{\partial a_k} \frac{\partial a_k}{\partial a_j}
+\]
+\[
+\delta_j = \frac{\partial h}{\partial a_j} \sum_k W_{kj} \frac{\partial E_n}{\partial a_k}
+\]
+\[
+a_k=\sum_j W_{kj} z_{j} = \sum_j W_{kj} h(a_j)
+\]
+
+\subsection{正準連結関数}
+\label{正準連結関数}
+
+さらに最も下層の出力$t$から誤差$\delta_j$を求める際は，$\delta_j = \sum_k \frac{\partial E_n}{\partial a_k} \frac{\partial a_k}{\partial a_j}$より，$a_k$を$y_k$すなわち教師信号$y_k$とおき，$\delta_j = \frac{\partial E_n}{\partial y_k} \frac{\partial y_k}{\partial a_j}$と求められる．この際，活性化関数を非線形関数すなわち指数分布関数とおいているため，活性化関数の逆関数相当の連結関数を定められる．ここで指数分布関数$g(\mu)$の連結関数は$g(\mu)=-\mu$となる．これらの活性化関数と連結関数の関連より，例えば$E$にクロスエントロピー，活性化関数$h$にsoftmax関数をもちいれば，$\delta_j = \sum_k \frac{y_k-t_k}{y_k(1-y_k)} I_{kj} y_k (1-y_k)$，すなわち$y_j-t_j$に帰着する．つまり誤差の算出を教師信号$y_k$と出力$t$の差に落とし込める．このように誤差（損失）関数と正準連結となる活性化関数をもちいることで誤差の算出のコストを軽減できる．
+
+\[
+\delta_j = \sum_k \frac{\partial E_n}{\partial a_k} \frac{\partial a_k}{\partial a_j},
+\delta_j = \frac{\partial E_n}{\partial y_k} \frac{\partial y_k}{\partial a_j}
+\]
+
+\[
+\delta_j = \sum_k \frac{y_k-t_k}{y_k(1-y_k)} I_{kj} y_k (1-y_k) = y_j - t_j
+\]
+
+
+\end{document}

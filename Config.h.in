@@ -1,0 +1,15 @@
+/*!
+ * @author Hisashi Ikari
+ */
+
+#ifndef TINYCV_BASE_CONFIG_H
+#define TINYCV_BASE_CONFIG_H
+
+#cmakedefine BUILD_CPU
+#cmakedefine BUILD_CUDA
+#cmakedefine BUILD_X5
+#cmakedefine BUILD_MEASURE
+#cmakedefine BUILD_VIDEO
+#cmakedefine BUILD_CL
+
+#endif
